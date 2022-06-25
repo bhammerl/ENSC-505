@@ -1,0 +1,389 @@
+//#####################################################################################################
+//###INPUTS### 
+//#####################################################################################################
+
+//Define start and end years
+var startYear= 2007;
+var endYear = 2020;
+
+//Define study area
+var aoi = studyArea;
+
+//Center map
+Map.centerObject(aoi, 10);
+
+// // Define a point feature collection to run LandTrendr on.
+var points = ee.FeatureCollection([
+  ee.Feature(geometry, {'id': 0})
+]);
+
+//Sample code for selecting test points
+// // Define a point feature collection to run LandTrendr on.
+// var points = ee.FeatureCollection([
+//   ee.Feature(ee.Geometry.Point(-110.53523, 53.72977), {'id': 0})
+// ]);
+
+//Define visualization parameters
+var viz = {
+  min: 2007,
+  max: 2020,
+  palette: ['#9400D3', '#4B0082', '#0000FF', '#00FF00', '#FFFF00', '#FF7F00', '#FF0000']
+};
+
+//#####################################################################################################
+//###PREPARE IMAGE COLLECTION###
+//#####################################################################################################
+
+//Function to extract bitmask values. 
+function bitwiseExtract(value, fromBit, toBit) {
+  if (toBit === undefined) toBit = fromBit;
+  var maskSize = ee.Number(1).add(toBit).subtract(fromBit);
+  var mask = ee.Number(1).leftShift(maskSize).subtract(1);
+  return value.rightShift(fromBit).bitwiseAnd(mask);
+}
+
+/// A function to mask out cloudy pixels.
+var maskClouds = function(imageCollection) {
+var qa = imageCollection.select('QC_250m');
+var qabits = bitwiseExtract(qa, 0, 1);
+var band1quality = bitwiseExtract(qa, 4, 5, 6, 7);
+var band2quality = bitwiseExtract(qa, 8, 9, 10, 11);
+var mask = qabits.eq(0) // corrected product
+  .and(band1quality.eq(0)) // highest quality
+  .and(band2quality.eq(0)); // highest quality
+return imageCollection.updateMask(mask);
+};
+
+// Get a feature collection with studyArea boundary
+//MODIS Terra 250m Surface Reflectance dataset courtesy of NASA
+var dataset250 = ee.ImageCollection('MODIS/006/MOD09GQ')
+                  .filter(ee.Filter.date('2007-06-01', '2020-09-30'));
+var imageCollection = dataset250
+.filterBounds(studyArea)
+.map(maskClouds)
+.set('system:time_start', ee.Date.fromYMD(2007,6,1));
+
+// Make a list of years, then for each year filter the collection, mask clouds, and reduce by median
+// Important to add system:time_start after reducing in order to filter by date later
+var stepList = ee.List.sequence(2007,2020);
+
+var filterCollection = stepList.map(function(year){
+  var startDate = ee.Date.fromYMD(year,6,1);
+  var endDate = ee.Date.fromYMD(year,9,30);
+  var composite = imageCollection.filterDate(startDate, endDate)
+                        .median()
+                        .set('system:time_start',startDate.millis());
+  return composite;
+});
+
+var yearlyComposites = ee.ImageCollection(filterCollection);
+print(yearlyComposites, 'Masked and Filtered Composites');
+
+//####################################################################################################
+//###Calculate NDVI###
+//####################################################################################################
+// Define a function to calculate a spectral index to segment with LT
+function ndvi(img){
+  var ndviImg = img.select(['sur_refl_b02', 'sur_refl_b01'],['nir','red']);
+  ndviImg = ndviImg.expression(
+    '((NIR - RED) / (NIR + RED))', {
+      'NIR': ndviImg.select('nir'),
+      'RED': ndviImg.select('red')
+    }).rename('NDVI');
+  return img.addBands(ndviImg).addBands(ndviImg.rename('NDVI_FTV')); //Add a seperate fitted band 
+}
+
+//Map NDVI over each composite
+yearlyComposites = yearlyComposites.map(function(imageCollection){
+  return ndvi(imageCollection);
+});
+
+print(yearlyComposites, 'With NDVI as Band');
+
+//####################################################################################################
+//###CREATE IMAGE COLLECTION OF YEARLY COMPOSITES TO VISUALIZE NDVI
+//###################################################################################################
+
+// Create image collection of yearly composites, selecting the NDVI band
+var ndviCollection = yearlyComposites.select('NDVI');
+
+// Create variables for each yearly composite
+
+var y2007 = ndviCollection.filterDate('2007-06-01','2007-09-30')
+  .first()
+  .clip(studyArea);
+  
+var y2008 = ndviCollection.filterDate('2008-06-01','2008-09-30')
+  .first()
+  .clip(studyArea);
+
+var y2009 = ndviCollection.filterDate('2009-06-01','2009-09-30')
+  .first()
+  .clip(studyArea);
+
+var y2010 = ndviCollection.filterDate('2010-06-01','2010-09-30')
+  .first()
+  .clip(studyArea);
+
+var y2011 = ndviCollection.filterDate('2011-06-01','2011-09-30')
+  .first()
+  .clip(studyArea);
+
+var y2012 = ndviCollection.filterDate('2012-06-01','2012-09-30')
+  .first()
+  .clip(studyArea);
+var y2013 = ndviCollection.filterDate('2013-06-01','2013-09-30')
+  .first()
+  .clip(studyArea);
+
+var y2014 = ndviCollection.filterDate('2014-06-01','2014-09-30')
+  .first()
+  .clip(studyArea);
+  
+var y2015 = ndviCollection.filterDate('2015-06-01','2015-09-30')
+  .first()
+  .clip(studyArea);
+  
+var y2016 = ndviCollection.filterDate('2016-06-01','2016-09-30')
+  .first()
+  .clip(studyArea);
+  
+var y2017 = ndviCollection.filterDate('2017-06-01','2017-09-30')
+  .first()
+  .clip(studyArea);
+  
+var y2018 = ndviCollection.filterDate('2018-06-01','2018-09-30')
+  .first()
+  .clip(studyArea);
+
+var y2019 = ndviCollection.filterDate('2019-06-01','2019-09-30')
+  .first()
+  .clip(studyArea);
+
+var y2020 = ndviCollection.filterDate('2020-06-01','2020-09-30')
+  .first()
+  .clip(studyArea);
+
+// Add the NDVI maps for each year 2007-2020
+  var ndviParams = {min: 0, max: 1, palette: ['white', 'green']};
+Map.addLayer(y2007, ndviParams, '2007 NDVI');
+Map.addLayer(y2008, ndviParams, '2008 NDVI');
+Map.addLayer(y2009, ndviParams, '2009 NDVI');
+Map.addLayer(y2010, ndviParams, '2010 NDVI');
+Map.addLayer(y2011, ndviParams, '2011 NDVI');
+Map.addLayer(y2012, ndviParams, '2012 NDVI');
+Map.addLayer(y2013, ndviParams, '2013 NDVI');
+Map.addLayer(y2014, ndviParams, '2014 NDVI');
+Map.addLayer(y2015, ndviParams, '2015 NDVI');
+Map.addLayer(y2016, ndviParams, '2016 NDVI');
+Map.addLayer(y2017, ndviParams, '2017 NDVI');
+Map.addLayer(y2018, ndviParams, '2018 NDVI');
+Map.addLayer(y2019, ndviParams, '2019 NDVI');
+Map.addLayer(y2020, ndviParams, '2020 NDVI');
+print ("image test", yearlyComposites);
+
+//####################################################################################################
+//###RUN LANDTRENDR
+//###################################################################################################
+// Reference: Kennedy, R. E., Yang, Z., & Cohen, W. B. (2010). Detecting trends in forest disturbance and recovery using yearly Landsat time series: 
+// 1. LandTrendr—Temporal segmentation algorithms. Remote Sensing of Environment, 114(12), 2897-2910.
+//            https://github.com/eMapR/LT-GEE
+
+var distDir = -1; // define the sign of spectral change for vegetation loss for the segmentation index 
+
+
+// Define the segmentation parameters:
+var run_params = { 
+  maxSegments:            6,
+  spikeThreshold:         0.9,
+  vertexCountOvershoot:   3,
+  preventOneYearRecovery: true,
+  recoveryThreshold:      0.25,
+  pvalThreshold:          0.05,
+  bestModelProportion:    0.75,
+  minObservationsNeeded:  6
+};
+
+// Return a 1-band annual image collection of the spectral index
+var ltCollection = yearlyComposites.map(ndvi);  
+
+// Apply the function to calculate the segmentation index
+// Multiply the segmentation index by the distDir to ensure that vegetation loss is associated with a positive spectral change
+// Add additional fitted NDVI band so that output includes a 'fitted NDVI' band
+ltCollection = ltCollection.map(function(img) {
+  var newNDVI = img.select('NDVI').multiply(distDir);
+  return newNDVI.addBands(img.select(['NDVI_FTV'])).set('system:time_start', img.get('system:time_start'))}); 
+print(ltCollection);
+
+// Add LT collection to the segmentation run parameter object
+run_params.timeSeries = ltCollection;
+
+
+// Run LandTrendr spectral temporal segmentation algorithm
+var lt = ee.Algorithms.TemporalSegmentation.LandTrendr(run_params); 
+
+// Define disturbance mapping filter parameters 
+// Pre-disturbance value threshold - values below the provided threshold will exclude disturbance for those pixels - units are in units of segIndex
+var preVal     = 300; 
+// minimum mapping unit for disturbance patches - units of pixels
+var mmu        = 1;       
+
+// assemble the disturbance extraction parameters
+var distParams = {
+  pre_val: preVal           
+};
+
+// Create a function to extract greatest disturbance based on spectral delta between vertices 
+var extractDisturbance = function(lt, distDir, params, mmu) {
+  // select only the vertices that represents a change
+  // get the vertex - yes(1)/no(0) dimension
+  var vertexMask = lt.arraySlice(0, 3, 4);
+  // convert the 0's to masked
+  var vertices = lt.arrayMask(vertexMask); 
+
+  // Construct segment start and end point years and index values
+  var left = vertices.arraySlice(1, 0, -1);    // slice out the vertices as the start of segments
+  var right = vertices.arraySlice(1, 1, null); // slice out the vertices as the end of segments
+  var startYear = left.arraySlice(0, 0, 1);    // get year dimension of LT data from the segment start vertices
+  var startVal = left.arraySlice(0, 2, 3);     // get spectral index dimension of LT data from the segment start vertices
+  var endYear = right.arraySlice(0, 0, 1);     // get year dimension of LT data from the segment end vertices 
+  var endVal = right.arraySlice(0, 2, 3);      // get spectral index dimension of LT data from the segment end vertices
+
+  var dur = endYear.subtract(startYear);       // subtract the segment start year from the segment end year to calculate the duration of segments 
+  var mag = endVal.subtract(startVal);         // substract the segment start index value from the segment end index value to calculate the delta of segments 
+
+  // Add segment start year, delta, duration, and starting spectral index value to an array 
+  // Make an image of segment attributes:
+  // multiply by the distDir parameter to re-orient the spectral index if it was flipped for segmentation - 
+  // do it here so that the subtraction to calculate segment delta in the above line is consistent -
+  // add 1 to the detection year, because the vertex year is not the first year that change is detected, it is the following year
+  var distImg = ee.Image.cat([startYear.add(1), mag, dur, startVal.multiply(distDir)]).toArray(0); 
+
+  // Sort the segments in the disturbance attribute image delta by spectral index change delta  
+  var distImgSorted = distImg.arraySort(mag.multiply(-1));  // flip the delta around so that the greatest delta segment is first in order
+  // Slice out the first (greatest) delta
+  var tempDistImg = distImgSorted.arraySlice(1, 0, 1).unmask(ee.Image(ee.Array([[0],[0],[0],[0]]))); // get the first segment in the sorted array
+
+  // Make an image from the array of attributes for the greatest disturbance
+  var finalDistImg = ee.Image.cat(tempDistImg.arraySlice(0,0,1).arrayProject([1]).arrayFlatten([['yod']]),     // slice out year of disturbance detection and re-arrange to an image band 
+                                  tempDistImg.arraySlice(0,1,2).arrayProject([1]).arrayFlatten([['mag']]),     // slice out the disturbance magnitude and re-arrange to an image band 
+                                  tempDistImg.arraySlice(0,2,3).arrayProject([1]).arrayFlatten([['dur']]),     // slice out the disturbance duration and re-arrange to an image band
+                                  tempDistImg.arraySlice(0,3,4).arrayProject([1]).arrayFlatten([['preval']])); // slice out the pre-disturbance spectral value and re-arrange to an image band
+
+ 
+// Assign Int 16 structure
+finalDistImg = finalDistImg.int16();
+
+  // Patchify the remaining disturbance pixels using a minimum mapping unit
+  if(mmu > 0){
+    var mmuPatches = finalDistImg.select(['yod'])           // patchify based on disturbances having the same year of detection
+                            .connectedPixelCount(mmu, true) // count the number of pixel in a candidate patch
+                            .gte(mmu);                      // compare to user-defined minnimum mapping unit
+    finalDistImg = finalDistImg.updateMask(mmuPatches)}    // mask the pixels/patches that are less than minimum mapping unit
+     
+return finalDistImg; // return the filtered  disturbance attribute image
+};
+
+var distImg = extractDisturbance(lt.select('LandTrendr'), distDir, distParams).select(['yod']).clip(aoi);
+
+//Add year of disturbance detection to map
+Map.addLayer(distImg, viz, 'Year of Detection');  
+
+//##################################################################################################
+//###Create a legend to visualize changes###
+//##################################################################################################
+
+//Create a legend to visualization changes
+// Set position of panel
+var legend = ui.Panel({
+style: {
+position: 'bottom-left',
+padding: '8px 15px'
+}
+});
+
+// Create legend title
+var legendTitle = ui.Label({
+value: 'Year',
+style: {
+fontWeight: 'bold',
+fontSize: '18px',
+margin: '0 0 4px 0',
+padding: '0'
+}
+});
+
+// Add the title to the panel
+legend.add(legendTitle);
+
+// Create the legend image
+var lon = ee.Image.pixelLonLat().select('latitude');
+var gradient = lon.multiply((viz.max-viz.min)/100.0).add(viz.min);
+var legendImage = gradient.visualize(viz);
+
+// Create text on top of legend
+var panel = ui.Panel({
+widgets: [
+ui.Label(viz['max'])
+],
+});
+
+legend.add(panel);
+
+// Create thumbnail from the image
+var thumbnail = ui.Thumbnail({
+image: legendImage,
+params: {bbox:'0,0,10,100', dimensions:'10x200'},
+style: {padding: '1px', position: 'bottom-center'}
+});
+
+// add the thumbnail to the legend
+legend.add(thumbnail);
+
+// create text on top of legend
+var panel = ui.Panel({
+widgets: [
+ui.Label(viz['min'])
+],
+});
+
+legend.add(panel);
+
+Map.add(legend);
+
+
+// #############################################################################
+// ### CREATE CHART of NDVI VAlUES###
+// #############################################################################
+
+// Create multi-band image where each image contains two bands: the original NDVI,
+//   and the fitted NDVI (and a 'Year' property)
+
+// Make array of band names (years), use to flatten array of fitted NDVI output
+var years = [];
+for (var i = startYear; i <= endYear; ++i) years.push(i.toString());
+var ltFitImg = lt.select(["NDVI_FTV_fit"])
+                  .arrayFlatten([years]);
+
+// Map over ltCollection to extract original NDVI band and add fitted NDVI band
+var outputColl = ltCollection.map(function(image){
+  var outImg = image.select(['NDVI']).multiply(distDir);
+  var thisYr = ee.Date(image.get('system:time_start')).get('year');
+  var bandKey = ltFitImg.bandNames().indexOf(ee.String(thisYr));
+  var addedBand = ltFitImg.select([bandKey]).rename('fitNDVI');
+  return outImg
+            .addBands(addedBand)
+            .set('Year',thisYr)
+            .set('system:time_start',image.get('system:time_start'));
+});
+print('outputColl:', outputColl);
+
+// Create chart of band values for given geometry (i.e. point location)
+var samplePtChart = ui.Chart.image.series({
+  imageCollection: outputColl,
+  region: points,
+  reducer: ee.Reducer.mean(),
+  scale: 250,
+  xProperty: 'Year'
+});
+print('NDVI Chart',samplePtChart);
